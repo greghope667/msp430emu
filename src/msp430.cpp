@@ -145,7 +145,7 @@ read_mmio(uint16_t address)
         throw Error("Misaligned MMIO read");
 
     if (address == MMIO_UART) {
-        return uint8_t(getc(stdin));
+        return uint8_t(MSP430::uart_read());
     }
 
     throw Error("Read from unknown MMIO device");
@@ -163,7 +163,7 @@ write_mmio(uint16_t address, uint16_t value)
 
     switch (address) {
         case MMIO_UART:
-            putc(uint8_t(value), stdout);
+            MSP430::uart_print(value);
             return;
         case MMIO_EXIT:
             throw Error("MMIO exit triggered");
@@ -347,7 +347,7 @@ single_op_loc(MSP430& msp, uint16_t instruction)
             return { msp.registers[op.target], true };
         case 3: {
             auto address = msp.registers[op.target];
-            if (op.bw && (op.target != SP))
+            if (op.bw && (op.target > SP))
                 msp.registers[op.target] += 1;
             else
                 msp.registers[op.target] += 2;

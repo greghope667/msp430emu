@@ -69,6 +69,10 @@ struct MSP430 {
         return arr;
     }
 
+    // IO for uart - user implementation required
+    static void uart_print(char);
+    static char uart_read();
+
 private:
     InstructionClass classify(uint16_t instruction) const {
         switch((instruction >> 12) & 0xf) {
