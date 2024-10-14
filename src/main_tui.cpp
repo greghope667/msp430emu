@@ -1,11 +1,9 @@
 #include "msp430.hpp"
-#include <notcurses/notcurses.h>
-#include <stdio.h>
+#include <string>
+#include <termbox2.h>
 
-static notcurses* nc;
-static ncplane* nplane;
-static MSP430 msp430;
 static std::string uart_out{};
+static MSP430 msp430{};
 
 void MSP430::uart_print(char c) {
     uart_out += c;
@@ -15,40 +13,122 @@ char MSP430::uart_read() {
     return -1;
 }
 
-static bool console_init()
+static void fill(int x, int y, int w, int h, uintattr_t bg)
 {
-    if (not (nc = notcurses_core_init(nullptr, nullptr))) {
-        fprintf(stderr, "Failed to initialise notcurses\n");
-        return false;
+    for (int i=0; i<w; i++) {
+        for (int j=0; j<h; j++) {
+            tb_set_cell(x+i, y+j, ' ', bg, bg);
+        }
+    }
+}
+
+static void box(int x, int y, int w, int h, uintattr_t fg, uintattr_t bg)
+{
+    w--, h--;
+
+    tb_set_cell(x  , y  , '+', fg, bg);
+    tb_set_cell(x+w, y  , '+', fg, bg);
+    tb_set_cell(x  , y+h, '+', fg, bg);
+    tb_set_cell(x+w, y+h, '+', fg, bg);
+
+    for (int i=1; i<w; i++) {
+        tb_set_cell(x+i, y  , '-', fg, bg);
+        tb_set_cell(x+i, y+h, '-', fg, bg);
     }
 
-    if (not (nplane = notcurses_stdplane(nc))) {
-        fprintf(stderr, "Failed to create ncplane\n");
-        return false;
+    for (int i=1; i<h; i++) {
+        tb_set_cell(x  , y+i, '|', fg, bg);
+        tb_set_cell(x+w, y+i, '|', fg, bg);
     }
+}
 
+static uint16_t memdump_address{};
+
+static void memdump()
+{
+
+    for (unsigned i=0; i<16; i++) {
+        auto line_start = memdump_address + i * 16;
+
+        if (line_start >= MSP430::RAM_SIZE) {
+            char line[100];
+            memset(line, ' ', sizeof(line));
+            line[sizeof(line)-1] = 0;
+            tb_print(2, 12+i, TB_BLACK, TB_BLACK, line);
+            continue;
+        }
+
+        tb_printf(2, 12+i, TB_DEFAULT, TB_BLACK, "% 4x:", line_start);
+
+        for (int j=0; j<16; j++) {
+            unsigned char ch = msp430.ram->data()[line_start + j];
+            unsigned char pch = ch;
+            uintattr_t fg = TB_GREEN;
+
+            if (ch==0) {
+                pch = '.';
+                fg = TB_DEFAULT|TB_DIM;
+            } else if (not isprint(ch)) {
+                pch = ',';
+                fg = TB_DEFAULT;
+            }
+
+            tb_printf(2+6+3*j, 12+i, fg, TB_BLACK, "%02x", ch);
+            tb_set_cell(2+6+3*16+2+j, 12+i, pch, fg, TB_BLACK);
+        }
+    }
+}
+
+static bool handle_event(tb_event e)
+{
+    switch (e.ch) {
+        case 's': 
+            try {
+                msp430.step_instruction();
+            } catch (std::runtime_error& e) {
+                tb_print(2, 10, TB_BLACK, TB_RED, e.what());
+            }
+            break;
+        case 'c':
+        case 'q':
+            return false;
+        case 'r':
+            msp430.registers[MSP430::PC] = 0;
+            fill(2, 10, 40, 1, TB_BLACK);
+            break;
+        case 'j':
+            memdump_address += 16;
+            break;
+        case 'k':
+            memdump_address -= 16;
+            break;
+        case 'u':
+            memdump_address -= 16*16;
+            break;
+        case 'd':
+            memdump_address += 16*16;
+            break;
+    }
     return true;
 }
 
 static void console_run()
 {
-    for (;;) {
-        ncplane_cursor_move_yx(nplane, 0, 0);
-        ncplane_puttext(nplane, 2, NCALIGN_LEFT, msp430.print_array().data(), nullptr);
-        ncplane_puttext(nplane, 8, NCALIGN_LEFT, uart_out.c_str(), nullptr);
-        notcurses_render(nc);
+    fill(1, 1, 39, 7, TB_BLUE);
+    box(1, 1, 39, 7, TB_YELLOW, TB_BLUE);
+    for (int i=0;; i++) {
+        tb_printf(0, 0, TB_DEFAULT, TB_BLACK, "%i", i);
+        tb_print(3, 2, TB_WHITE, TB_BLUE, msp430.print_array().data());
+        tb_print(2, 8, TB_GREEN, TB_BLACK, uart_out.c_str());
+        memdump();
+        tb_present();
 
-        ncinput input;
-        if (notcurses_get_blocking(nc, &input) == uint32_t(-1))
-            break;
+        tb_event ev;
+        if (tb_poll_event(&ev) != TB_OK)
+            return;
 
-        if (input.id == 's') {
-            try {
-                msp430.step_instruction();
-            } catch (std::runtime_error& e) {
-                ncplane_puttext(nplane, 0, NCALIGN_LEFT, e.what(), nullptr);
-            }
-        }
+        if (not handle_event(ev))
+            return;
     }
 }
 
@@ -66,9 +146,11 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    if (console_init())
-        console_run();
+    if (tb_init() != TB_OK) {
+        fprintf(stderr, "Failed to initialise termbox\n");
+        exit(1);
+    }
 
-    if (nc)
-        notcurses_stop(nc);
+    console_run();
+    tb_shutdown();
 }
