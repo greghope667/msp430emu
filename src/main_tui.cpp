@@ -81,6 +81,9 @@ static void memdump()
 
 static bool handle_event(tb_event e)
 {
+    if (e.type != TB_EVENT_KEY)
+        return true;
+
     switch (e.ch) {
         case 's': 
             try {
@@ -89,7 +92,6 @@ static bool handle_event(tb_event e)
                 tb_print(2, 10, TB_BLACK, TB_RED, e.what());
             }
             break;
-        case 'c':
         case 'q':
             return false;
         case 'r':
@@ -108,6 +110,9 @@ static bool handle_event(tb_event e)
         case 'd':
             memdump_address += 16*16;
             break;
+        case 0:
+            if (e.key == TB_KEY_CTRL_C && e.mod == TB_MOD_CTRL)
+                return false;
     }
     return true;
 }
@@ -124,8 +129,7 @@ static void console_run()
         tb_present();
 
         tb_event ev;
-        if (tb_poll_event(&ev) != TB_OK)
-            return;
+        tb_poll_event(&ev);
 
         if (not handle_event(ev))
             return;
