@@ -428,13 +428,13 @@ execute_decoded_dual_op(MSP430& msp, DualOpCode op, uint16_t source, Destination
             break;
 
         case SUBC:
-            target = target + ~source + 1;
+            target = target + ~source + carry_in;
             alu_flags_update<mode>(msp, not sign1_in, sign2_in, target);
             dest.write<mode>(msp, target);
             break;
 
         case SUB:
-            target = target + ~source + carry_in;
+            target = target + ~source + 1;
             alu_flags_update<mode>(msp, not sign1_in, sign2_in, target);
             dest.write<mode>(msp, target);
             break;
