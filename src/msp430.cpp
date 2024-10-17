@@ -428,19 +428,19 @@ execute_decoded_dual_op(MSP430& msp, DualOpCode op, uint16_t source, Destination
             break;
 
         case SUBC:
-            target = target + ~source + carry_in;
+            target = target + (uint16_t)~source + carry_in;
             alu_flags_update<mode>(msp, not sign1_in, sign2_in, target);
             dest.write<mode>(msp, target);
             break;
 
         case SUB:
-            target = target + ~source + 1;
+            target = target + (uint16_t)~source + 1;
             alu_flags_update<mode>(msp, not sign1_in, sign2_in, target);
             dest.write<mode>(msp, target);
             break;
 
         case CMP:
-            target = target + ~source + 1;
+            target = target + (uint16_t)~source + 1;
             alu_flags_update<mode>(msp, not sign1_in, sign2_in, target);
             break;
 
@@ -650,3 +650,93 @@ void MSP430::step_instruction()
 
     // puts(print_array().data());
 }
+
+#ifdef MSP430TEST
+
+void MSP430::uart_print(char c) {
+    throw Error("IO operation in test");
+}
+
+char MSP430::uart_read() {
+    throw Error("IO operation in test");
+}
+
+static void test_alu2_word()
+{
+    MSP430 m{};
+    int successes{};
+
+    struct TestCase {
+        DualOpCode opp;
+        uint16_t src, dst, flags;
+        uint16_t expected, flags_out;
+    };
+
+    static constexpr struct TestCase tests[] = {
+        TestCase( ADD, 1, 1, 0, 2, 0 ),
+        TestCase( SUB, 1, 2, 0, 1, CF ),
+        TestCase( SUB, 1, 1, 0, 0, ZF|CF ),
+        TestCase( CMP, 1, -1, 0, -1, NF|CF ),
+        TestCase( SUB, 1, -1, 0, -2, NF|CF ),
+        TestCase( ADD, 30000, 30000, 0, 60000, VF|NF ),
+        TestCase( SUB, 30000, -30000, 0, 5536, VF|CF ),
+    };
+
+    for (auto& test : tests) {
+        MSP430::DualOpInsn insn = {
+            .dest = 5,
+            .as = 0,
+            .bw = 0,
+            .ad = 0,
+            .source = 4,
+            .opcode = test.opp,
+        };
+        write_ram<Word>(*m.ram, 0, std::bit_cast<uint16_t>(insn));
+
+        m.registers[PC] = 0;
+        m.registers[SR] = test.flags;
+        m.registers[4] = test.src;
+        m.registers[5] = test.dst;
+
+        try {
+            m.step_instruction();
+            if (m.registers[5] != test.expected) {
+                printf(
+                    "ALU2 test fail (result mismatch)\n"
+                    "\topp %x src %i (%04x) dst %i (%04x)\n"
+                    "\texpected %i (%04x) actual %i (%04x)\n",
+                    test.opp, test.src, test.src, test.dst, test.dst,
+                    test.expected, test.expected,
+                    m.registers[5], m.registers[5]
+                );
+            } else if (m.registers[SR] != test.flags_out) {
+                printf(
+                    "ALU2 test fail (flags mismatch)\n"
+                    "\topp %x src %i (%04x) dst %i (%04x)\n"
+                    "\texpected %04x actual %04x\n",
+                    test.opp, test.src, test.src, test.dst, test.dst,
+                    test.flags_out, m.registers[SR]
+                );
+            } else {
+                successes++;
+            }
+        } catch (std::exception& e) {
+            printf(
+                "ALU2 test fail (exception thrown)\n"
+                "\topp %x src %i (%04x) dst %i (%04x)\n"
+                "\texception %s\n",
+                test.opp, test.src, test.src, test.dst, test.dst,
+                e.what()
+            );
+        }
+    };
+
+    printf("ALU2 count %i success %i\n", std::size(tests), successes);
+}
+
+int main()
+{
+    test_alu2_word();
+}
+
+#endif

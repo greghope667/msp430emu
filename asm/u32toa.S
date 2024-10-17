@@ -19,12 +19,12 @@ to_base_10:
 .fixup_add3:
 	mov.b	scratch-1(r12), r11	; Get BCD pair from buffer
 	cmp	#80, r11		; If digit >= 5
-	jhs	1f
+	jlo	1f
 	add	#48, r11		;     digit += 3
 1:	mov	#15, r10
 	and	r11, r10
 	cmp	#5, r10			; If digit >= 5
-	jhs	2f
+	jlo	2f
 	add	#3, r11			;     digit += 3
 2:	mov.b	r11, scratch-1(r12)	; Store fixed up pair
 	dec	r12
