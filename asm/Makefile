@@ -10,10 +10,7 @@ OBJDUMP=$(PREFIX)objdump
 %.o: %.S
 	cpp $< | $(AS) -mcpu=430 -o $@
 
-code.elf: link.ld start.o code.o
-	$(LD) -T $^ -o $@
-
-u32toa.elf: link.ld start.o u32toa.o
+%.elf: link.ld start.o %.o
 	$(LD) -T $^ -o $@
 
 %.bin: %.elf
@@ -22,7 +19,4 @@ u32toa.elf: link.ld start.o u32toa.o
 %.tc: %.bin
 	xxd -g1 -c2 $< | awk '{print "0x"$$2 " 0x"$$3}' > $@
 
-build: code.elf u32toa.elf
-
-list: code.elf
-	$(OBJDUMP) -d $<
+build: code.elf u32toa.elf divmod10.elf
