@@ -1,4 +1,4 @@
-PREFIX=msp430-
+PREFIX=msp430-elf-
 
 AS=$(PREFIX)as
 LD=$(PREFIX)ld
