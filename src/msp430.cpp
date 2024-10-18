@@ -653,7 +653,7 @@ void MSP430::step_instruction()
 
 #ifdef MSP430TEST
 
-void MSP430::uart_print(char c) {
+void MSP430::uart_print(char) {
     throw Error("IO operation in test");
 }
 
@@ -731,7 +731,7 @@ static void test_alu2_word()
         }
     };
 
-    printf("ALU2 count %i success %i\n", std::size(tests), successes);
+    printf("test-alu2: count %zu success %i\n", std::size(tests), successes);
 }
 
 int main()
